@@ -30,6 +30,7 @@ struct Object {
     vector<vector<int>> edges;
     Point3D pos = {0,0,0};
     vector<Point3D> normalv;
+    double xangle; double yangle;
 };
 Object readfile(string path) {
     ifstream file(path);
@@ -113,9 +114,9 @@ void makenormals() {
             Point3D p1 = objects[j].vertices[objects[j].edges[i][1]];
             Point3D p2 = objects[j].vertices[objects[j].edges[i][2]];
             double rx =(p1.y-p0.y)*(p2.z-p0.z)-(p1.z-p0.z)*(p2.y-p0.y);
-            double ry =(p1.x-p0.x)*(p2.z-p0.z)-(p1.z-p0.z)*(p2.x-p0.x);
+            double ry =-(p1.x-p0.x)*(p2.z-p0.z)+(p1.z-p0.z)*(p2.x-p0.x);
             double rz =(p1.x-p0.x)*(p2.y-p0.y)-(p1.y-p0.y)*(p2.x-p0.x);
-            double len = rx*rx+ry*ry+rz*rz;
+            double len = sqrt(rx*rx+ry*ry+rz*rz);
             Point3D normalv = {.x=rx/len, .y=ry/len, .z=rz/len};
             objects[j].normalv.push_back(normalv);
         }
@@ -156,14 +157,15 @@ void addt() {
 }
 
 double fpscount = 60;
-void update(SDL_Event event, double deltatime) {
+void update(double deltatime) {
     //fps
     fpscount = 1/deltatime;
+    cout<<fpscount<<"\n";
     //update angle
     xangle+=xanglev*deltatime;
     yangle+=yanglev*deltatime;
     // update pos
-    camerav.y+=-9.8*deltatime;
+    //camerav.y+=-9.8*deltatime;
     if(camerapos.y<0) {
         camerapos.y = 0;
         camerav.y = 0;
@@ -213,7 +215,8 @@ void render() {// TODO: flat shading
             SDL_FPoint points[polylen];
             for(int k = 0; k < polylen;k++) { // for every vertex index
                 Point3D vertex = objects[i].vertices[objects[i].edges[j][k]];
-                vertex = rotate(vertex, xangle, yangle);
+                
+                vertex = rotate(vertex, objects[i].xangle, objects[i].yangle);
                 double rx = (vertex.x+objects[i].pos.x)-camerapos.x;double ry = (vertex.y+objects[i].pos.y)-camerapos.y;double rz = (vertex.z+objects[i].pos.z)-camerapos.z;
                 projverts[k]=project(rotate({.x=rx,.y=ry,.z=rz},cxang,cyang));
                 float x = static_cast<float>(WIDTH/2+projverts[k].x*scale);
@@ -230,29 +233,30 @@ void render() {// TODO: flat shading
                 } else {
                     
                 }
-                
             }
+            //Point3D midd = {
+            //.x=(objects[i].vertices[objects[i].edges[j][0]].x+objects[i].vertices[objects[i].edges[j][1]].x+objects[i].vertices[objects[i].edges[j][2]].x)/3+objects[i].pos.x-camerapos.x,
+            //.y=(objects[i].vertices[objects[i].edges[j][0]].y+objects[i].vertices[objects[i].edges[j][1]].y+objects[i].vertices[objects[i].edges[j][2]].y)/3+objects[i].pos.y-camerapos.y,
+            //.z=(objects[i].vertices[objects[i].edges[j][0]].z+objects[i].vertices[objects[i].edges[j][1]].z+objects[i].vertices[objects[i].edges[j][2]].z)/3+objects[i].pos.z-camerapos.z
+            //};
+            //Point3D projmidd = project(rotate(midd,cxang,cyang));
+            //Point3D newnormal = {
+            //    .x=objects[i].normalv[j].x+midd.x,
+            //    .y=objects[i].normalv[j].y+midd.y,
+            //    .z=objects[i].normalv[j].z+midd.z
+            //};
+            //if(acos(rotate(newnormal,cxang,cyang).z*1)<=M_PI/2) {
+            //    isnull = true;
+            //}
             if(!isnull) {
-                SDL_RenderGeometry(renderer,nullptr,poly,polylen,nullptr,0);
+                //SDL_RenderGeometry(renderer,nullptr,poly,polylen,nullptr,0);
                 SDL_SetRenderDrawColor(renderer,255,255,255,255);
-                //SDL_RenderLines(renderer, points, polylen);
+                SDL_RenderLines(renderer, points, polylen);
+                // render normals
+                //Point3D projnorm = project(rotate(newnormal,cxang,cyang));
+                //SDL_SetRenderDrawColor(renderer,0,0,255,255);
+                //SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
             }
-            // render normals //FIXME
-            Point3D midd = {
-            .x=(objects[i].vertices[objects[i].edges[j][0]].x+objects[i].vertices[objects[i].edges[j][1]].x+objects[i].vertices[objects[i].edges[j][2]].x)/3+objects[i].pos.x,
-            .y=(objects[i].vertices[objects[i].edges[j][0]].y+objects[i].vertices[objects[i].edges[j][1]].y+objects[i].vertices[objects[i].edges[j][2]].y)/3+objects[i].pos.y,
-            .z=(objects[i].vertices[objects[i].edges[j][0]].z+objects[i].vertices[objects[i].edges[j][1]].z+objects[i].vertices[objects[i].edges[j][2]].z)/3+objects[i].pos.z
-            };
-            Point3D projmidd = project(rotate(midd,cxang,cyang));
-            Point3D newnormal = {
-                .x=objects[i].normalv[j].x+midd.x,
-                .y=objects[i].normalv[j].y+midd.y,
-                .z=objects[i].normalv[j].z+midd.z
-            };
-            Point3D projnorm = project(rotate(objects[i].normalv[i],cxang,cyang));
-            SDL_SetRenderDrawColor(renderer,0,0,255,255);
-            //SDL_RenderLine(renderer, WIDTH/2+scale*0, HEIGHT/2-scale*0,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
-
         }
     }
     
@@ -260,8 +264,8 @@ void render() {// TODO: flat shading
 }
 
 double ltime;
-void mainloop(SDL_Event event, double deltatime) {
-    update(event, deltatime);
+void mainloop(double deltatime) {
+    update(deltatime);
     render();
 }
 
@@ -274,11 +278,13 @@ int main(int agrc, char* argv[]) {
     SDL_ShowCursor();
 
     objects.push_back(readfile("assets/tcube.obj"));
-    objects.push_back(readfile("assets/cilinder.obj"));
-    objects[1].pos = {.x=3,.y=0,.z=3};
+    objects[0].pos={.x=0,.y=0,.z=5};
+    //objects.push_back(readfile("assets/cilinder.obj"));
+    //objects[1].pos = {.x=3,.y=0,.z=3};
     makenormals();
     bool running=true;
     SDL_Event event;
+    //ltime = chrono::duration_cast<chrono::nanoseconds>(chrono::steady_clock::now().time_since_epoch()).count();
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
@@ -293,8 +299,8 @@ int main(int agrc, char* argv[]) {
         auto now = chrono::steady_clock::now();
         double ctime = chrono::duration_cast<chrono::nanoseconds>(now.time_since_epoch()).count();
         //cout<<abs(ctime-ltime)<<"\n";
-        if((abs(ctime-ltime)/1000000000)<=1/FPS) {
-            mainloop(event, (abs(ctime-ltime))/1000000000);
+        if((abs(ctime-ltime)/1000000000)>=1/FPS) {
+            mainloop((abs(ctime-ltime))/1000000000);
         }
         ltime = ctime;
     }
