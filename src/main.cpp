@@ -264,7 +264,7 @@ void render() {// TODO: flat shading
                 poly[k].tex_coord={0.0f,0.0f};
                 points[k].x = x;points[k].y = y;
                 
-                // behind camera check & back face //TODO: backface culling
+                // behind camera check
                 if(projverts[k].z<=0) {
                     isnull=true;
                 } else {
@@ -276,6 +276,7 @@ void render() {// TODO: flat shading
                     SDL_RenderDebugText(renderer,x,y-dvsize,to_string(objects[i].edges[j][k]).c_str());
                 }
             }
+            // proj midd
             Point3D gmidd = objects[i].midd[j];
             gmidd = rotate(gmidd, objects[i].xangle, objects[i].yangle);
             Point3D relmidd = {
@@ -284,12 +285,14 @@ void render() {// TODO: flat shading
             .z=gmidd.z+objects[i].pos.z-camerapos.z
             };
             Point3D projmidd = project(rotate(relmidd,cxang,cyang));
+            // proj normal
             Point3D rotnormal = rotate(objects[i].normalv[j], objects[i].xangle,objects[i].yangle);
             Point3D newnormal = {
-                .x=objects[i].normalv[j].x+relmidd.x,
-                .y=objects[i].normalv[j].y+relmidd.y,
-                .z=objects[i].normalv[j].z+relmidd.z
+                .x=rotnormal.x+relmidd.x,
+                .y=rotnormal.y+relmidd.y,
+                .z=rotnormal.z+relmidd.z
             };
+            // TODO: backface culling
             if(acos(rotate(newnormal,cxang,cyang).z*1)<=1.57079632679489661923) {
                 isnull = true;
             }
@@ -300,11 +303,12 @@ void render() {// TODO: flat shading
                 SDL_SetRenderDrawColor(renderer,255,255,255,255);
                 SDL_RenderLines(renderer, points, polylen);
                 // render normals
-                //Point3D projnorm = project(rotate(newnormal,cxang,cyang));
-                //SDL_SetRenderDrawColor(renderer,0,0,255,255);
-                //SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
-                // FIXME: Render midd as vert(test)
+                Point3D projnorm = project(rotate(newnormal,cxang,cyang));
+                SDL_SetRenderDrawColor(renderer,0,0,255,255);
+                SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
+                // Render midd as vert
                 SDL_FRect vert = {.x=static_cast<float>(WIDTH/2+scale*projmidd.x-dvsize/2),.y=static_cast<float>(HEIGHT/2-scale*projmidd.y-dvsize/2),.w=dvsize,.h=dvsize};
+                SDL_SetRenderDrawColor(renderer,255,255,100,255);
                 SDL_RenderFillRect(renderer,&vert);
             }
         }
@@ -329,7 +333,7 @@ int main(int agrc, char* argv[]) {
     Object tcube;
     readfile("assets/objects/tcube.obj",&tcube);
     tcube.pos={0,0,0};
-    tcube.xanglev=0; tcube.yanglev=0;
+    tcube.xanglev=0; tcube.yanglev=1;
     objects.push_back(tcube);
     //objects[0].pos={.x=0,.y=0,.z=5};
     //objects.push_back(readfile("assets/objects/cilinder.obj"));
