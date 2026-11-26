@@ -30,9 +30,11 @@ struct Object {
     vector<vector<int>> edges;
     Point3D pos = {0,0,0};
     vector<Point3D> normalv;
-    double xangle; double yangle;
+    vector<Point3D> midd;
+    double xangle=0; double yangle=0;
+    double xanglev=0; double yanglev=0;
 };
-Object readfile(string path) {
+int readfile(string path, Object* destobj) {
     ifstream file(path);
     string text;
     //cout<<text.size()<<endl;
@@ -63,6 +65,7 @@ Object readfile(string path) {
                         value="";
                     } else if(i==2) { 
                         vertex.z = (stod(value));
+                        object.vertices.push_back(vertex);
                         value="";
                     }
                     i++;
@@ -85,11 +88,26 @@ Object readfile(string path) {
                 }
             }
         }
-        object.vertices.push_back(vertex);
         n++;
     }
+    destobj->edges=object.edges;
+    destobj->vertices=object.vertices;
     file.close();
-    return object;
+    return 0;
+}
+
+void printobject(Object object) {
+    for(int i = 0; i < object.vertices.size();i++) {
+        cout<<"v "<<object.vertices[i].x<<" "<<object.vertices[i].y<<" "<<object.vertices[i].z<<" \n";
+    }
+    for(int i = 0; i < object.edges.size();i++) {
+        cout<<"l ";
+        for(int j = 0; j < object.edges[i].size();j++) {
+            cout<<object.edges[i][j]<<" ";
+        }
+        cout<<"\n";
+    }
+    cout<<"\n"<<object.vertices.size()<<"\n";
 }
 
 // camera
@@ -107,6 +125,7 @@ double projscale=600.0f;
 vector<Object> objects;
 Point3D lightv = {.x=1,.y=0,.z=0};
 
+
 void makenormals() {
     for(int j = 0; j< objects.size();j++) {
         for(int i = 0; i < objects[j].edges.size();i++) { // for face
@@ -119,10 +138,19 @@ void makenormals() {
             double len = sqrt(rx*rx+ry*ry+rz*rz);
             Point3D normalv = {.x=rx/len, .y=ry/len, .z=rz/len};
             objects[j].normalv.push_back(normalv);
+            //midd
+            Point3D v0 = objects[j].vertices[objects[j].edges[j][0]];
+            Point3D v1 = objects[j].vertices[objects[j].edges[j][1]];
+            Point3D v2 = objects[j].vertices[objects[j].edges[j][2]];
+            Point3D gmidd = {
+                .x=(v0.x+v1.x+v2.x)/3,
+                .y=(v0.y+v1.y+v2.y)/3,
+                .z=(v0.z+v1.z+v2.z)/3
+            };
+            objects[j].midd.push_back(gmidd);
         }
     }
 }
-
 Point3D project(Point3D p) {
     double zoffset = p.z+projd;
     return {x:projscale*p.x/FOV/zoffset, y:projscale*p.y/FOV/zoffset, z:zoffset};
@@ -160,7 +188,7 @@ double fpscount = 60;
 void update(double deltatime) {
     //fps
     fpscount = 1/deltatime;
-    cout<<fpscount<<"\n";
+    //cout<<fpscount<<"\n";
     //update angle
     xangle+=xanglev*deltatime;
     yangle+=yanglev*deltatime;
@@ -171,6 +199,11 @@ void update(double deltatime) {
         camerav.y = 0;
     }
     camerapos.x+=camerav.x*deltatime;camerapos.y+=camerav.y*deltatime;camerapos.z+=camerav.z*deltatime;
+    // rotate objects
+    for(int i = 0; i < objects.size(); i++) {
+        objects[i].xangle+=objects[i].xanglev*deltatime;
+        objects[i].yangle+=objects[i].yanglev*deltatime;
+    }
 
     // move camera
     if(!console) {
@@ -200,10 +233,14 @@ void update(double deltatime) {
     
 }
 
-int scale = HEIGHT/10;
+int scale = 60;
+float dvsize = 20.0f;
 void render() {// TODO: flat shading
     SDL_SetRenderDrawColor(renderer, 0,0,0,255);
     SDL_RenderClear(renderer);
+    // fps
+    SDL_SetRenderDrawColor(renderer,200,200,0,255);
+    SDL_RenderDebugText(renderer,WIDTH/2,10,("FPS: "+to_string(fpscount)).c_str());
 
     for(int i = 0; i< objects.size(); i++) { // for every object
         for(int j = 0; j <objects[i].edges.size();j++) { // for every poly
@@ -233,30 +270,50 @@ void render() {// TODO: flat shading
                 } else {
                     
                 }
+                
+                // draw vertices
+                SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                SDL_FRect vert = {.x=x-dvsize/2,.y=y-dvsize/2,.w=dvsize,.h=dvsize};
+                SDL_RenderFillRect(renderer,&vert);
+                // TODO: draw indeces
+                SDL_RenderDebugText(renderer,x,y-dvsize,to_string(objects[i].edges[j][k]).c_str());
             }
-            //Point3D midd = {
-            //.x=(objects[i].vertices[objects[i].edges[j][0]].x+objects[i].vertices[objects[i].edges[j][1]].x+objects[i].vertices[objects[i].edges[j][2]].x)/3+objects[i].pos.x-camerapos.x,
-            //.y=(objects[i].vertices[objects[i].edges[j][0]].y+objects[i].vertices[objects[i].edges[j][1]].y+objects[i].vertices[objects[i].edges[j][2]].y)/3+objects[i].pos.y-camerapos.y,
-            //.z=(objects[i].vertices[objects[i].edges[j][0]].z+objects[i].vertices[objects[i].edges[j][1]].z+objects[i].vertices[objects[i].edges[j][2]].z)/3+objects[i].pos.z-camerapos.z
-            //};
-            //Point3D projmidd = project(rotate(midd,cxang,cyang));
-            //Point3D newnormal = {
-            //    .x=objects[i].normalv[j].x+midd.x,
-            //    .y=objects[i].normalv[j].y+midd.y,
-            //    .z=objects[i].normalv[j].z+midd.z
-            //};
-            //if(acos(rotate(newnormal,cxang,cyang).z*1)<=M_PI/2) {
-            //    isnull = true;
-            //}
+            Point3D v0 = rotate(objects[i].vertices[objects[i].edges[j][0]], objects[i].xangle,objects[i].yangle);
+            Point3D v1 = rotate(objects[i].vertices[objects[i].edges[j][1]], objects[i].xangle,objects[i].yangle);
+            Point3D v2 = rotate(objects[i].vertices[objects[i].edges[j][2]], objects[i].xangle,objects[i].yangle);
+            Point3D gmidd = {
+                .x=(v0.x+v1.x+v2.x)/3,
+                .y=(v0.y+v1.y+v2.y)/3,
+                .z=(v0.z+v1.z+v2.z)/3
+            };
+            gmidd = rotate(gmidd, objects[i].xangle, objects[i].yangle);
+            Point3D relmidd = {
+            .x=objects[i].midd[j].x+objects[i].pos.x-camerapos.x,
+            .y=objects[i].midd[j].y+objects[i].pos.y-camerapos.y,
+            .z=objects[i].midd[j].z+objects[i].pos.z-camerapos.z
+            };
+            Point3D projmidd = project(rotate(relmidd,cxang,cyang));
+            Point3D rotnormal = rotate(objects[i].normalv[j], objects[i].xangle,objects[i].yangle);
+            Point3D newnormal = {
+                .x=objects[i].normalv[j].x+relmidd.x,
+                .y=objects[i].normalv[j].y+relmidd.y,
+                .z=objects[i].normalv[j].z+relmidd.z
+            };
+            if(acos(rotate(newnormal,cxang,cyang).z*1)<=1/2) {
+                isnull = true;
+            }
             if(!isnull) {
                 //SDL_RenderGeometry(renderer,nullptr,poly,polylen,nullptr,0);
                 SDL_SetRenderDrawColor(renderer,255,255,255,255);
                 SDL_RenderLines(renderer, points, polylen);
                 // render normals
-                //Point3D projnorm = project(rotate(newnormal,cxang,cyang));
-                //SDL_SetRenderDrawColor(renderer,0,0,255,255);
-                //SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
+                Point3D projnorm = project(rotate(newnormal,cxang,cyang));
+                SDL_SetRenderDrawColor(renderer,0,0,255,255);
+                SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
             }
+            // FIXME: Render midd as vert
+            SDL_FRect vert = {.x=WIDTH/2+scale*projmidd.x-dvsize/2,.y=HEIGHT/2-scale*projmidd.y-dvsize/2,.w=dvsize,.h=dvsize};
+            SDL_RenderFillRect(renderer,&vert);
         }
     }
     
@@ -275,18 +332,27 @@ int main(int agrc, char* argv[]) {
     SDL_GetWindowSurface(window);
     SDL_UpdateWindowSurface(window);
     SDL_SetWindowRelativeMouseMode(window, true);
-    SDL_ShowCursor();
+    //SDL_ShowCursor();
 
-    objects.push_back(readfile("assets/tcube.obj"));
-    objects[0].pos={.x=0,.y=0,.z=5};
-    //objects.push_back(readfile("assets/cilinder.obj"));
+    Object tcube;
+    readfile("assets/objects/tcube.obj",&tcube);
+    tcube.pos={0,0,0};
+    tcube.xanglev=0; tcube.yanglev=1;
+    objects.push_back(tcube);
+    //objects[0].pos={.x=0,.y=0,.z=5};
+    //objects.push_back(readfile("assets/objects/cilinder.obj"));
     //objects[1].pos = {.x=3,.y=0,.z=3};
     makenormals();
+    //printobject(objects[0]);
     bool running=true;
     SDL_Event event;
-    //ltime = chrono::duration_cast<chrono::nanoseconds>(chrono::steady_clock::now().time_since_epoch()).count();
+    ltime = chrono::duration_cast<chrono::nanoseconds>(chrono::steady_clock::now().time_since_epoch()).count();
+    //std::cout<<ltime<<"\n";
     while (running) {
         while (SDL_PollEvent(&event)) {
+            if(SDL_GetKeyboardState(NULL)[SDL_SCANCODE_Q]==true) {
+                running = false;
+            }
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
             }
@@ -301,11 +367,12 @@ int main(int agrc, char* argv[]) {
         //cout<<abs(ctime-ltime)<<"\n";
         if((abs(ctime-ltime)/1000000000)>=1/FPS) {
             mainloop((abs(ctime-ltime))/1000000000);
+            ltime = ctime;
         }
-        ltime = ctime;
+        //cout<<abs(ltime-ctime)/1000000000<<"\n";
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
-    cout<<"exiting";
+    cout<<"exited";
     return 0;
 };
