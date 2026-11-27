@@ -8,6 +8,7 @@
 #include <fstream>
 #include <chrono>
 #include <math.h>
+#include <random>
 using namespace std;
 
 const int WIDTH = 800;
@@ -224,7 +225,7 @@ void update(double deltatime) {
             camerapos.z+=-cameraspeed*deltatime*sin(cyang);
         }if(keys[SDL_SCANCODE_SPACE]) {
             camerapos.y+=cameraspeed*deltatime;
-        }else if(keys[SDL_SCANCODE_C]) {
+        }else if(keys[SDL_SCANCODE_LCTRL]) {
             camerapos.y+=-cameraspeed*deltatime;
         }
     } else {
@@ -235,6 +236,14 @@ void update(double deltatime) {
 
 int scale = 60;
 float dvsize = 20.0f;
+bool vischeck = false;
+bool drawv = false;
+bool drawmidd = false;
+bool flatshading = true;
+bool rendernorm = false;
+bool renderedges = false;
+bool renderfaces = true;
+bool showind = false;
 void render() {// TODO: flat shading
     SDL_SetRenderDrawColor(renderer, 0,0,0,255);
     SDL_RenderClear(renderer);
@@ -244,38 +253,11 @@ void render() {// TODO: flat shading
 
     for(int i = 0; i< objects.size(); i++) { // for every object
         for(int j = 0; j <objects[i].edges.size();j++) { // for every poly
-            // render faces
             bool isnull = false;
             int polylen = objects[i].edges[j].size();
             SDL_Vertex poly[polylen];
             Point3D projverts[polylen];
             SDL_FPoint points[polylen];
-            for(int k = 0; k < polylen;k++) { // for every vertex index
-                Point3D vertex = objects[i].vertices[objects[i].edges[j][k]];
-                
-                vertex = rotate(vertex, objects[i].xangle, objects[i].yangle);
-                double rx = (vertex.x+objects[i].pos.x)-camerapos.x;double ry = (vertex.y+objects[i].pos.y)-camerapos.y;double rz = (vertex.z+objects[i].pos.z)-camerapos.z;
-                projverts[k]=project(rotate({.x=rx,.y=ry,.z=rz},cxang,cyang));
-                float x = static_cast<float>(WIDTH/2+projverts[k].x*scale);
-                float y = static_cast<float>(HEIGHT/2-projverts[k].y*scale);
-                
-                poly[k].position = {x, y};
-                poly[k].color={1.0f, 0.3f, 0.3f, 1.0f};
-                poly[k].tex_coord={0.0f,0.0f};
-                points[k].x = x;points[k].y = y;
-                
-                // behind camera check
-                if(projverts[k].z<=0) {
-                    isnull=true;
-                } else {
-                    // draw vertices
-                    SDL_SetRenderDrawColor(renderer,255,0,0,255);
-                    SDL_FRect vert = {.x=x-dvsize/2,.y=y-dvsize/2,.w=dvsize,.h=dvsize};
-                    SDL_RenderFillRect(renderer,&vert);
-                    // FIXME: draw indeces
-                    SDL_RenderDebugText(renderer,x,y-dvsize,to_string(objects[i].edges[j][k]).c_str());
-                }
-            }
             // proj midd
             Point3D gmidd = objects[i].midd[j];
             gmidd = rotate(gmidd, objects[i].xangle, objects[i].yangle);
@@ -292,24 +274,64 @@ void render() {// TODO: flat shading
                 .y=rotnormal.y+relmidd.y,
                 .z=rotnormal.z+relmidd.z
             };
-            // TODO: backface culling
-            if(acos(rotate(newnormal,cxang,cyang).z*1)<=1.57079632679489661923) {
+            for(int k = 0; k < polylen;k++) { // for every vertex index
+                Point3D vertex = objects[i].vertices[objects[i].edges[j][k]];
+                
+                vertex = rotate(vertex, objects[i].xangle, objects[i].yangle);
+                double rx = (vertex.x+objects[i].pos.x)-camerapos.x;double ry = (vertex.y+objects[i].pos.y)-camerapos.y;double rz = (vertex.z+objects[i].pos.z)-camerapos.z;
+                projverts[k]=project(rotate({.x=rx,.y=ry,.z=rz},cxang,cyang));
+                float x = static_cast<float>(WIDTH/2+projverts[k].x*scale);
+                float y = static_cast<float>(HEIGHT/2-projverts[k].y*scale);
+                
+                double prodct = lightv.x*rotnormal.x+lightv.y*rotnormal.y+lightv.z*rotnormal.z;
+                float op = 1.0f*acos(prodct)/3.14159265358979323846;
+                poly[k].position = {x, y};
+                poly[k].color={1.0f, 0.3f, 0.3f, op};
+                poly[k].tex_coord={0.0f,0.0f};
+                points[k].x = x;points[k].y = y;
+                
+                // behind camera check
+                if(projverts[k].z<=0) {
+                    isnull=true;
+                } else {
+                    // draw vertices
+                    if(drawv) {
+                        SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                        SDL_FRect vert = {.x=x-dvsize/2,.y=y-dvsize/2,.w=dvsize,.h=dvsize};
+                        SDL_RenderFillRect(renderer,&vert);
+                    }
+                    // TODO: show indeces(font)
+                    if(showind) {
+                        SDL_RenderDebugText(renderer,x,y-dvsize,to_string(objects[i].edges[j][k]).c_str());
+                    }
+                }
+            }
+            // TODO: backface culling check
+            if(vischeck&&acos(rotate(rotnormal,cxang,cyang).z*1)<=1.57079632679489661923) {
                 isnull = true;
             }
             if(!isnull) {
                 // render faces
-                //SDL_RenderGeometry(renderer,nullptr,poly,polylen,nullptr,0);
-                // render lines
-                SDL_SetRenderDrawColor(renderer,255,255,255,255);
-                SDL_RenderLines(renderer, points, polylen);
+                if(renderfaces) {
+                    SDL_RenderGeometry(renderer,nullptr,poly,polylen,nullptr,0);
+                }
+                // render edges
+                if(renderedges) {
+                    SDL_SetRenderDrawColor(renderer,255,255,255,255);
+                    SDL_RenderLines(renderer, points, polylen);
+                }
                 // render normals
-                Point3D projnorm = project(rotate(newnormal,cxang,cyang));
-                SDL_SetRenderDrawColor(renderer,0,0,255,255);
-                SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
-                // Render midd as vert
-                SDL_FRect vert = {.x=static_cast<float>(WIDTH/2+scale*projmidd.x-dvsize/2),.y=static_cast<float>(HEIGHT/2-scale*projmidd.y-dvsize/2),.w=dvsize,.h=dvsize};
-                SDL_SetRenderDrawColor(renderer,255,255,100,255);
-                SDL_RenderFillRect(renderer,&vert);
+                if(rendernorm) {
+                    Point3D projnorm = project(rotate(newnormal,cxang,cyang));
+                    SDL_SetRenderDrawColor(renderer,0,0,255,255);
+                    SDL_RenderLine(renderer, WIDTH/2+scale*projmidd.x, HEIGHT/2-scale*projmidd.y,WIDTH/2+scale*projnorm.x,HEIGHT/2-scale*projnorm.y);
+                }
+                // draw midd
+                if(drawmidd) {
+                    SDL_FRect vert = {.x=static_cast<float>(WIDTH/2+scale*projmidd.x-dvsize/2),.y=static_cast<float>(HEIGHT/2-scale*projmidd.y-dvsize/2),.w=dvsize,.h=dvsize};
+                    SDL_SetRenderDrawColor(renderer,255,255,100,255);
+                    SDL_RenderFillRect(renderer,&vert);
+                }
             }
         }
     }
@@ -335,9 +357,11 @@ int main(int agrc, char* argv[]) {
     tcube.pos={0,0,0};
     tcube.xanglev=0; tcube.yanglev=1;
     objects.push_back(tcube);
-    //objects[0].pos={.x=0,.y=0,.z=5};
-    //objects.push_back(readfile("assets/objects/cilinder.obj"));
-    //objects[1].pos = {.x=3,.y=0,.z=3};
+    Object cilinder;
+    readfile("assets/objects/cilinder.obj",&cilinder);
+    cilinder.pos={.x=0,.y=0,.z=5};
+    cilinder.xanglev=.2;cilinder.yanglev=-.5;
+    objects.push_back(cilinder);
     makenormals();
     //printobject(objects[0]);
     bool running=true;
